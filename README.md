@@ -2,7 +2,7 @@
 
 right now im just trying out things. currently transformers with tic tac toe to see if it can leanr. next is transformers with mcts.
 
-```pycon
+```console
 game1
 
 Current Board:
