@@ -1,6 +1,6 @@
 # bodies
 
-right now im just trying out things. currently transformers with tic tac toe to see if it can leanr. next is transformers with mcts.
+right now im just trying out things. currently transformers with tic tac toe to see if it can learn. next is transformers with mcts. also this is rapid prototyping of ideas so far so im functioning more as a prompt engineer.
 
 ```console
 game1
