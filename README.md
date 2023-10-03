@@ -2,7 +2,7 @@
 
 right now im just trying out things. currently transformers with tic tac toe to see if it can leanr. next is transformers with mcts.
 
-'''py
+```pycon
 game1
 
 Current Board:
@@ -312,5 +312,4 @@ Final Board:
 [2. 0. 0.]
 [2. 0. 1.]
 
-Player 2 (AI) Wins!
-```
+Player 2 (AI) Wins!```
