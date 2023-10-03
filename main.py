@@ -99,7 +99,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 
 # 4. Training
-num_epochs = 250
+num_epochs = 200
 batch_size = 32
 
 for epoch in range(num_epochs):
@@ -143,10 +143,14 @@ def play_game(model, dimention=3):
             
             if player == 1: 
                 print("\nAI Player 1 making move...")
-                move_index = np.argmax(move_probabilities)
+                move_probabilities_softmax = torch.nn.functional.softmax(torch.tensor(move_probabilities), dim=0)
+                normalized_probabilities = move_probabilities_softmax / move_probabilities_softmax.sum()
+                move_index = np.random.choice(np.arange(DIMENSION**2), p=normalized_probabilities.numpy().flatten())
             else:
                 print("\nAI Player 2 making move...")
-                move_index = np.argmin(move_probabilities)
+                move_probabilities_softmax = torch.nn.functional.softmax(-torch.tensor(move_probabilities), dim=0)
+                normalized_probabilities = move_probabilities_softmax / move_probabilities_softmax.sum()
+                move_index = np.random.choice(np.arange(DIMENSION**2), p=normalized_probabilities.numpy().flatten())
                 
             move = (move_index // dimention, move_index % dimention)
             
