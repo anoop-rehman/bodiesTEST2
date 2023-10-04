@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 from collections import deque
 import tictactoe 
+from tqdm import tqdm
+import random
 
 # Constants
 DIMENSION = 3
@@ -92,17 +94,17 @@ def generate_sequences(buffer, sequence_length=5):
 
 # Data and Model
 replay_buffer = deque(maxlen=10000)  # Replay Buffer
-generate_random_games(100, replay_buffer)
+generate_random_games(10000, replay_buffer)
 
 model = TicTacToeTransformerSeq()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 
 # 4. Training
-num_epochs = 1000
+num_epochs = 200
 batch_size = 32
 
-for epoch in range(num_epochs):
+for epoch in tqdm(range(num_epochs), desc="Training"):
     np.random.shuffle(replay_buffer)
     for i in range(0, len(replay_buffer), batch_size):
         experiences = list(replay_buffer)[i:i+batch_size]
@@ -126,51 +128,48 @@ for epoch in range(num_epochs):
     
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.6f}")
 
-def play_game(model, dimention=3):
+def play_game(model, dimension=3):
     boardState = tictactoe.emptyTable.copy()
     player = 1
-    
-    while not tictactoe.winningState(boardState, dimention) and not tictactoe.fullBoard(boardState, dimention):
+
+    while not tictactoe.winningState(boardState, dimension) and not tictactoe.fullBoard(boardState, dimension):
         print("\nCurrent Board:")
         tictactoe.printFormmating(boardState)
-        
+
         with torch.no_grad():
             input_tensor = torch.tensor(boardState, dtype=torch.long).unsqueeze(0)
-            move_probabilities = model(input_tensor).squeeze().numpy().reshape((dimention, dimention))
+            move_probabilities = model(input_tensor).squeeze().numpy().reshape((dimension, dimension))
             print("\nMove Heat Map:")
             print(np.round(move_probabilities, 2))  # Showing probabilities in a grid
             possible_moves = np.where(boardState == 0)
-            
-            if player == 1: 
+
+            if player == 1:
                 print("\nAI Player 1 making move...")
-                move_probabilities_softmax = torch.nn.functional.softmax(torch.tensor(move_probabilities), dim=0)
-                normalized_probabilities = move_probabilities_softmax / move_probabilities_softmax.sum()
-                move_index = np.random.choice(np.arange(DIMENSION**2), p=normalized_probabilities.numpy().flatten())
+                valid_moves = [move for move in zip(*possible_moves)]
+                if valid_moves:
+                    # Add some randomness to the decision
+                    move_probabilities_with_noise = [move_probabilities[move] + random.uniform(-0.1, 0.1) for move in valid_moves]
+                    largest_moves = [move for move in valid_moves if move_probabilities[move] == np.max(move_probabilities_with_noise)]
+                    move = random.choice(largest_moves) if largest_moves else random.choice(valid_moves)
+                else:
+                    print("No valid moves left for AI Player 1. It's a tie!")
+                    break
             else:
                 print("\nAI Player 2 making move...")
-                move_probabilities_softmax = torch.nn.functional.softmax(-torch.tensor(move_probabilities), dim=0)
-                normalized_probabilities = move_probabilities_softmax / move_probabilities_softmax.sum()
-                move_index = np.random.choice(np.arange(DIMENSION**2), p=normalized_probabilities.numpy().flatten())
-                
-            move = (move_index // dimention, move_index % dimention)
-            
-            while move not in list(zip(*possible_moves)):
-                if player == 1:
-                    print("AI Player 1 trying illegal move, choosing next best move")
-                    move_probabilities[move] = -1  # so it won't be chosen again
-                    move_index = np.argmax(move_probabilities)
+                valid_moves = [move for move in zip(*possible_moves)]
+                if valid_moves:
+                    # Add some randomness to the decision
+                    move_probabilities_with_noise = [move_probabilities[move] + random.uniform(-0.1, 0.1) for move in valid_moves]
+                    smallest_moves = [move for move in valid_moves if move_probabilities[move] == np.min(move_probabilities_with_noise)]
+                    move = random.choice(smallest_moves) if smallest_moves else random.choice(valid_moves)
                 else:
-                    print("AI Player 2 making move...")
-                    move_probabilities_softmax = torch.nn.functional.softmax(-torch.tensor(move_probabilities), dim=0)
-                    normalized_probabilities = move_probabilities_softmax / move_probabilities_softmax.sum()
-                    move_index = np.random.choice(np.arange(DIMENSION**2), p=normalized_probabilities.numpy().flatten())
-                    
-                move = (move_index // dimention, move_index % dimention)
-                
-        boardState[move] = player
-        player = 3 - player
-        
-    winner = tictactoe.whoWins(boardState, dimention)
+                    print("No valid moves left for AI Player 2. It's a tie!")
+                    break
+
+            boardState[move] = player
+            player = 3 - player
+
+    winner = tictactoe.whoWins(boardState, dimension)
     print("\nFinal Board:")
     tictactoe.printFormmating(boardState)
     if winner == -1:
@@ -179,6 +178,9 @@ def play_game(model, dimention=3):
         print("\nPlayer 2 (AI) Wins!")
     else:
         print("\nIt's a tie!")
+
+
+
 
 print("game1")
 play_game(model)
