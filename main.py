@@ -101,30 +101,25 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 
 # 4. Training
-num_epochs = 200
+num_epochs = 100
 batch_size = 32
 
 for epoch in tqdm(range(num_epochs), desc="Training"):
-    np.random.shuffle(replay_buffer)
-    for i in range(0, len(replay_buffer), batch_size):
-        experiences = list(replay_buffer)[i:i+batch_size]
+    for _ in range(10):
+        experiences = random.sample(replay_buffer, batch_size)  # Sample experiences from the replay buffer
         inputs = preprocess_experience(experiences)
-
-        # Actions are the moves made by the players
-        actions = torch.tensor([exp[1][0]*DIMENSION + exp[1][1] for exp in experiences], dtype=torch.long)
         
-        # Still using reward as target, but careful with its use (see loss computation)
+        actions = torch.tensor([exp[1][0]*DIMENSION + exp[1][1] for exp in experiences], dtype=torch.long)
         rewards = torch.tensor([exp[2] for exp in experiences], dtype=torch.float)
         
-        logits = model(inputs)  # Logits, not softmax probabilities
+        logits = model(inputs)
         
-        # Custom loss: - log probability of taken action * reward (negation for gradient ascent)
-        # Selects the log probability of the action taken by indexing logits with actions taken and scales by reward.
         loss = -torch.mean(torch.log_softmax(logits, dim=-1).gather(1, actions.unsqueeze(1)).squeeze() * rewards)
         
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        
     
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.6f}")
 
@@ -188,3 +183,56 @@ print("game2")
 play_game(model)
 print("game3")
 play_game(model)
+
+def random_agent(boardState):
+    possible_moves = np.where(boardState == 0)
+    num_possible_moves = possible_moves[0].shape[0]
+    if num_possible_moves == 0:
+        return None
+    move_index = np.random.choice(num_possible_moves)
+    return (possible_moves[0][move_index], possible_moves[1][move_index])
+
+def play_game_with_random_agent(model, model_as_player, dimension=3):
+    boardState = EMPTY_TABLE.copy()
+    player = 1
+
+    while not tictactoe.winningState(boardState, dimension) and not tictactoe.fullBoard(boardState, dimension):
+        print("\nCurrent Board:")
+        tictactoe.printFormmating(boardState)
+
+        with torch.no_grad():
+            if player == model_as_player:
+                input_tensor = torch.tensor(boardState, dtype=torch.long).unsqueeze(0)
+                move_probabilities = model(input_tensor).squeeze().numpy().reshape((dimension, dimension))
+                possible_moves = np.where(boardState == 0)
+                valid_moves = [move for move in zip(*possible_moves)]
+                if valid_moves:
+                    move_probabilities_with_noise = [move_probabilities[move] + random.uniform(-0.1, 0.1) for move in valid_moves]
+                    if player == 1:
+                        largest_moves = [move for move in valid_moves if move_probabilities[move] == np.max(move_probabilities_with_noise)]
+                        move = random.choice(largest_moves) if largest_moves else random.choice(valid_moves)
+                    else:
+                        smallest_moves = [move for move in valid_moves if move_probabilities[move] == np.min(move_probabilities_with_noise)]
+                        move = random.choice(smallest_moves) if smallest_moves else random.choice(valid_moves)
+                else:
+                    break
+            else:
+                move = random_agent(boardState)
+
+            if move is None:
+                print(f"No valid moves left for Player {player}. It's a tie!")
+                break
+            boardState[move] = player
+            player = 3 - player
+
+    print("\nFinal Board:")
+    tictactoe.printFormmating(boardState)
+
+print("Game 1: AI (Player 1) vs Random (Player 2)")
+play_game_with_random_agent(model, 1)
+print("\nGame 2: AI (Player 1) vs Random (Player 2)")
+play_game_with_random_agent(model, 1)
+print("\nGame 3: Random (Player 1) vs AI (Player 2)")
+play_game_with_random_agent(model, 2)
+print("\nGame 4: Random (Player 1) vs AI (Player 2)")
+play_game_with_random_agent(model, 2)
