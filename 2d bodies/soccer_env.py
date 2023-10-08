@@ -3,6 +3,7 @@ import random
 import time
 
 class SoccerEnv:
+
     def __init__(self):
         pygame.init()
 
@@ -18,12 +19,15 @@ class SoccerEnv:
         self.net_height = 3 * self.CELL_SIZE
         self.net_top_position = (self.SCREEN_HEIGHT - self.net_height) // 2
 
-        self.reset_game()
+        self.initialize_game()
 
-    def reset_game(self):
-        self.ball_pos_x = self.GRID_WIDTH // 2 * self.CELL_SIZE + self.CELL_SIZE // 2
-        self.ball_pos_y = self.GRID_HEIGHT // 2 * self.CELL_SIZE + self.CELL_SIZE // 2
+    def initialize_game(self):
+        self.ball_pos_x, self.ball_pos_y = self.reset_ball()
+        self.ball_target_x = self.ball_pos_x
+        self.ball_target_y = self.ball_pos_y
         self.ball_speed = 2.0
+        self.ball_possession = random.choice(['A1', 'A2', 'B1', 'B2'])
+        self.scores = {'A': 0, 'B': 0}
 
         self.player_positions = {
             'A1': [self.GRID_WIDTH // 2 - 2, self.GRID_HEIGHT // 2 - 1],
@@ -32,59 +36,74 @@ class SoccerEnv:
             'B2': [self.GRID_WIDTH // 2 + 2, self.GRID_HEIGHT // 2 + 1]
         }
 
-        self.ball_possession = random.choice(['A1', 'A2', 'B1', 'B2'])
-        self.scores = {'A': 0, 'B': 0}
+    def reset_ball(self):
+        return self.GRID_WIDTH // 2 * self.CELL_SIZE + self.CELL_SIZE // 2, self.GRID_HEIGHT // 2 * self.CELL_SIZE + self.CELL_SIZE // 2
 
     def check_goal(self):
         if self.net_top_position <= self.ball_pos_y <= self.net_top_position + self.net_height:
-            if self.ball_pos_x <= self.CELL_SIZE:
-                self.scores['B'] += 1
+            if self.ball_pos_x <= self.CELL_SIZE:  # Ball enters left goal
                 return 'B'
-            elif self.ball_pos_x >= self.SCREEN_WIDTH - self.CELL_SIZE:
-                self.scores['A'] += 1
+            elif self.ball_pos_x >= self.SCREEN_WIDTH - self.CELL_SIZE:  # Ball enters right goal
                 return 'A'
         return None
 
     def step(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-
-        for player, pos in self.player_positions.items():
+        for player in self.player_positions.keys():
             actions = ['MOVE', 'SHOOT', 'PICK']
-            weights = [0.6, 0.2, 0.2] if player == self.ball_possession else [0.8, 0.1, 0.1]
+            weights = [0.6, 0.3, 0.1]
 
             chosen_action = random.choices(actions, weights, k=1)[0]
 
-            if chosen_action == "MOVE":
-                moves = ['LEFT', 'RIGHT', 'UP', 'DOWN']
-                move = random.choice(moves)
-                if move == 'LEFT' and pos[0] > 0:
-                    pos[0] -= 1
-                elif move == 'RIGHT' and pos[0] < self.GRID_WIDTH - 1:
-                    pos[0] += 1
-                elif move == 'UP' and pos[1] > 0:
-                    pos[1] -= 1
-                elif move == 'DOWN' and pos[1] < self.GRID_HEIGHT - 1:
-                    pos[1] += 1
+            if player == self.ball_possession:
+                if chosen_action == 'MOVE':
+                    moves = ['LEFT', 'RIGHT', 'UP', 'DOWN']
+                    move = random.choice(moves)
+                    if move == 'LEFT' and self.player_positions[player][0] > 0:
+                        self.player_positions[player][0] -= 1
+                    elif move == 'RIGHT' and self.player_positions[player][0] < self.GRID_WIDTH - 1:
+                        self.player_positions[player][0] += 1
+                    elif move == 'UP' and self.player_positions[player][1] > 0:
+                        self.player_positions[player][1] -= 1
+                    elif move == 'DOWN' and self.player_positions[player][1] < self.GRID_HEIGHT - 1:
+                        self.player_positions[player][1] += 1
 
-            elif chosen_action == "SHOOT" and player == self.ball_possession:
-                self.ball_possession = None
-                target_x = random.choice([0, self.SCREEN_WIDTH])
-                target_y = random.randint(self.net_top_position, self.net_top_position + self.net_height)
-                dx = target_x - self.ball_pos_x
-                dy = target_y - self.ball_pos_y
-                dist = max(abs(dx), abs(dy))
+                elif chosen_action == 'SHOOT':
+                    self.ball_possession = None
+                    self.ball_target_x = random.randint(0, self.SCREEN_WIDTH)
+                    self.ball_target_y = random.randint(self.net_top_position, self.net_top_position + self.net_height)
+            else:
+                if chosen_action == 'MOVE':
+                    moves = ['LEFT', 'RIGHT', 'UP', 'DOWN']
+                    move = random.choice(moves)
+                    if move == 'LEFT' and self.player_positions[player][0] > 0:
+                        self.player_positions[player][0] -= 1
+                    elif move == 'RIGHT' and self.player_positions[player][0] < self.GRID_WIDTH - 1:
+                        self.player_positions[player][0] += 1
+                    elif move == 'UP' and self.player_positions[player][1] > 0:
+                        self.player_positions[player][1] -= 1
+                    elif move == 'DOWN' and self.player_positions[player][1] < self.GRID_HEIGHT - 1:
+                        self.player_positions[player][1] += 1
+
+                elif chosen_action == 'PICK':
+                    if abs(self.player_positions[player][0]*self.CELL_SIZE + self.CELL_SIZE/2 - self.ball_pos_x) < self.CELL_SIZE and abs(self.player_positions[player][1]*self.CELL_SIZE + self.CELL_SIZE/2 - self.ball_pos_y) < self.CELL_SIZE:
+                        self.ball_possession = player
+
+        if self.ball_possession is None:
+            dx = self.ball_target_x - self.ball_pos_x
+            dy = self.ball_target_y - self.ball_pos_y
+            dist = max(abs(dx), abs(dy))
+            if dist > 0:
                 self.ball_pos_x += self.ball_speed * dx / dist
                 self.ball_pos_y += self.ball_speed * dy / dist
 
-            elif chosen_action == "PICK" and self.ball_possession is None:
-                if abs(self.ball_pos_x - pos[0]*self.CELL_SIZE) <= self.CELL_SIZE and abs(self.ball_pos_y - pos[1]*self.CELL_SIZE) <= self.CELL_SIZE:
-                    self.ball_possession = player
-
         scoring_team = self.check_goal()
         if scoring_team:
-            self.reset_game()
+            self.scores[scoring_team] += 1
+            print(f"Team {scoring_team} scored! Current Scores: A - {self.scores['A']} : B - {self.scores['B']}")
+            self.ball_pos_x, self.ball_pos_y = self.reset_ball()
+            self.ball_target_x = self.ball_pos_x
+            self.ball_target_y = self.ball_pos_y
+            self.ball_possession = random.choice(['A1', 'A2', 'B1', 'B2'])
 
     def render(self):
         self.screen.fill((255, 255, 255))
@@ -98,11 +117,12 @@ class SoccerEnv:
         }
 
         for player, pos in self.player_positions.items():
-            pygame.draw.circle(self.screen, player_colors[player], (pos[0]*self.CELL_SIZE + self.CELL_SIZE//2, pos[1]*self.CELL_SIZE + self.CELL_SIZE//2), self.CELL_SIZE//3)
+            x, y = pos
+            pygame.draw.circle(self.screen, player_colors[player], (x*self.CELL_SIZE + self.CELL_SIZE//2, y*self.CELL_SIZE + self.CELL_SIZE//2), self.CELL_SIZE//3)
 
         if self.ball_possession:
-            pos = self.player_positions[self.ball_possession]
-            pygame.draw.circle(self.screen, (255, 0, 0), (pos[0]*self.CELL_SIZE + self.CELL_SIZE//2, pos[1]*self.CELL_SIZE + self.CELL_SIZE//2), self.CELL_SIZE//4)
+            ball_x, ball_y = self.player_positions[self.ball_possession]
+            pygame.draw.circle(self.screen, (255, 0, 0), (ball_x*self.CELL_SIZE + self.CELL_SIZE//2, ball_y*self.CELL_SIZE + self.CELL_SIZE//2), self.CELL_SIZE//4)
         else:
             pygame.draw.circle(self.screen, (255, 0, 0), (int(self.ball_pos_x), int(self.ball_pos_y)), self.CELL_SIZE//4)
 
@@ -112,10 +132,17 @@ class SoccerEnv:
         pygame.display.flip()
 
     def run(self):
-        while True:
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
             self.step()
             self.render()
-            time.sleep(0.5)
+            # time.sleep(0.5)
+
+        pygame.quit()
 
 if __name__ == "__main__":
     env = SoccerEnv()
