@@ -36,6 +36,50 @@ def get_relative_positions(physics):
 
     return relative_player_positions, relative_ball_position, player_possessions
 
+def get_field_representation(physics):
+    # Get the size of a player's head (using the head geometry size)
+    player_size = np.array([0.2, 0.2])
+    
+    # Get the size of the field
+    field_size = np.array([12, 9])
+    
+    # Calculate the grid size based on the field size and player size
+    grid_size = (field_size / player_size).astype(int)
+    
+    # Create a numpy array representing the field
+    field_array = np.zeros(grid_size)
+    
+    # Convert real-world positions to grid coordinates
+    def to_grid_coordinates(pos):
+        x = int(pos[0] / player_size[0])
+        y = int(pos[1] / player_size[1])
+        # Ensure x and y are within valid boundaries
+        x = max(0, min(x, grid_size[0] - 1))
+        y = max(0, min(y, grid_size[1] - 1))
+        return x, y
+
+    
+    # Mark the players' positions on the array
+    for idx, player_name in enumerate(["home0/head_body", "home1/head_body", "away0/head_body", "away1/head_body"]):
+        player_pos = physics.named.data.xpos[player_name][:2]
+        x, y = to_grid_coordinates(player_pos)
+        field_array[x, y] = idx + 1  # Mark player positions with numbers 1 through 4
+    
+    # Mark the ball's position on the array
+    ball_pos = physics.named.data.xpos["soccer_ball/"][:2]
+    x, y = to_grid_coordinates(ball_pos)
+    field_array[x, y] = 5  # Mark ball position with 5
+    
+    # Mark the nets' positions on the array (assuming they are at the top and bottom of the field)
+    for y in range(field_array.shape[1]):
+        field_array[0, y] = 6  # Top net
+        field_array[-1, y] = 6  # Bottom net
+    
+    print(field_array.shape)
+    return field_array
+
+
+
 # Instantiates a 2-vs-2 BOXHEAD soccer environment with episodes of 10 seconds
 env = dm_soccer.load(team_size=2,
                      time_limit=10.0,
@@ -64,6 +108,10 @@ def policy(time_step, env=env):
     print("Relative Player Positions:", relative_player_positions)
     print("Relative Ball Position:", relative_ball_position)
     print("Ball Possession:", player_possessions)
+
+    # Get and print the field representation
+    field_representation = get_field_representation(env.physics)
+    print("Field Representation:\n", field_representation)
 
     return actions
 
