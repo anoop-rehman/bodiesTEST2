@@ -1,15 +1,15 @@
 import numpy as np
 from dm_control import viewer
 from dm_control.locomotion import soccer as dm_soccer
+from copy import deepcopy
 
-class DMSoccerEnv:
+class SoccerEnv:
     def __init__(self):
-        """Initialize the DMSoccerEnv environment."""
         self.ACTION_MAPPINGS = { # roll steer kick
             "move_up": np.array([1.0, 0.0, 0.0]),
             "move_down": np.array([-1.0, 0.0, 0.0]),
-            "move_left": np.array([-1.0, -0.1, 0.0]),
-            "move_right": np.array([0.0, 1.0, 0.0]),
+            "turn_left": np.array([0.0, -1, 0.0]), # i want this to be move left
+            "turn_right": np.array([0.0, 1.0, 0.0]),
             "shoot": np.array([0.0, 0.0, 1.0]),
             "no_action": np.array([0.0, 0.0, 0.0]),
         }
@@ -24,24 +24,29 @@ class DMSoccerEnv:
         )
 
         self.action_specs = self.env.action_spec()
-
-    def intuitive_to_action(self, intuitive_command):
-        """Convert intuitive command to its numerical action."""
-        base_action = self.ACTION_MAPPINGS.get(intuitive_command, self.ACTION_MAPPINGS["no_action"])
-        return [base_action for _ in self.action_specs]
-
-    def step(self, intuitive_command):
-        """Execute an action and return the state, reward, and done flag."""
-        actions = self.intuitive_to_action(intuitive_command)
-        print(actions)
-        time_step = self.env.step(actions)
+    
+    def intuitive_to_action(self, intuitive_commands):
+        # convert intuitive commands to numerical action arrays
+        actions = []
+        for command in intuitive_commands:
+            base_action = self.ACTION_MAPPINGS[command]
+            actions.append(deepcopy(base_action))
         
+        return actions
+    
+    def step(self, intuitive_commands):
+        # execute actions and return the state, reward, and done flag
+        actions = self.intuitive_to_action(intuitive_commands)
+        time_step = self.env.step(actions)
+
         relative_player_positions, relative_ball_position, player_possessions = self.get_relative_positions(self.env.physics)
         field_representation = self.get_field_representation(self.env.physics)
-        
+        player_orientations = self.get_player_orientations(self.env.physics)
+
         state = {
             'relative_player_positions': relative_player_positions,
             'relative_ball_position': relative_ball_position,
+            'player orientation': player_orientations,
             'player_possessions': player_possessions,
             'field_representation': field_representation
         }
@@ -50,13 +55,16 @@ class DMSoccerEnv:
         done = time_step.last()
         
         return state, reward, done
+    
+    def policy(self, time_step):
+        return self.intuitive_to_action(intuitive_commands)
 
     def visualize(self):
-        """Visualize the environment."""
+        # visualize environment
         viewer.launch(self.env, policy=self.policy)
-
+    
     def get_relative_positions(self, physics):
-        """Retrieve relative positions of players and ball."""
+        # Retrieve relative positions of players and ball.
         player_names = ["home0/head_body", "home1/head_body", "away0/head_body", "away1/head_body"]
         ball_name = "soccer_ball/"
 
@@ -73,7 +81,7 @@ class DMSoccerEnv:
         return relative_player_positions, relative_ball_position, player_possessions
 
     def get_field_representation(self, physics):
-        """Generate a grid representation of the field."""
+        # Generate a grid representation of the field.
         player_size = np.array([0.2, 0.2])
         field_size = np.array([12, 9])
         grid_size = (field_size / player_size).astype(int)
@@ -100,11 +108,36 @@ class DMSoccerEnv:
             field_array[-1, y] = 6
         
         return field_array
+    
+    def get_player_orientations(self, physics):
+        """Retrieve the orientations (yaw) of players."""
+        player_names = ["home0/head_body", "home1/head_body", "away0/head_body", "away1/head_body"]
+        
+        player_orientations = []
+        for player in player_names:
+            # Extract quaternion
+            quat = physics.named.data.xquat[player]
+            
+            # Convert quaternion to Euler angles
+            _, yaw, _ = self.quaternion_to_euler(quat)
+            
+            player_orientations.append(yaw)
+        
+        return player_orientations
 
-    def policy(self, time_step):
-        """Policy function for the viewer."""
-        return self.intuitive_to_action("move_up")
+    def quaternion_to_euler(self, quat):
+        """Convert quaternion to Euler angles."""
+        # Extract quaternion components
+        w, x, y, z = quat
+        
+        # Convert to Euler angles
+        pitch = np.arcsin(2.0 * (w * y - z * x))
+        roll = np.arctan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x**2 + y**2))
+        yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y**2 + z**2))
+        
+        return roll, pitch, yaw
 
+    
     def initialize(self):
         """Initialize the environment and return the initial state."""
         time_step = self.env.reset()
@@ -120,16 +153,13 @@ class DMSoccerEnv:
         
         return state
 
-# Example usage
-if __name__ == "__main__":
-    env = DMSoccerEnv()
-    initial_state = env.initialize()
-    print("Initial State:", initial_state)
+soccerenv = SoccerEnv()
+initial_state = soccerenv.initialize()
+done = False
 
-    done = False
-    while not done:
-        action = "move_left"  # Placeholder action for demonstration
-        state, reward, done = env.step(action)
-        print("State:", state)
-        print("Reward:", reward)
-        env.visualize()
+while True:
+    intuitive_commands = ["move_up", "move_down", "turn_left", "turn_right"]
+    state, reward, done = soccerenv.step(intuitive_commands)
+    print("State:", state)
+    print("Reward:", reward)
+    soccerenv.visualize()
