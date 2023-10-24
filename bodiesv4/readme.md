@@ -1,5 +1,6 @@
 to do
-- figure out how many degrees each turn is []
+- figure out how many degrees each turn is [x]
+    - 3 degrees
 - fix the goal post representation []
 - create blank transformer that focuses on goals and ball as priority []
 - reimplement neural mcts []
